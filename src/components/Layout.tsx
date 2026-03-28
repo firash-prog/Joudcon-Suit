@@ -24,9 +24,13 @@ export function Layout() {
   };
 
   const navItems = [
-    ...(dbUser?.role === 'admin' ? [
+    ...(dbUser?.role === 'admin' || dbUser?.permissions?.canAccessAdminDashboard ? [
       { to: '/admin', icon: Settings, label: 'Admin Dashboard', rotate: true },
+    ] : []),
+    ...(dbUser?.role === 'admin' || dbUser?.permissions?.canManageCRM ? [
       { to: '/admin/crm', icon: Users, label: 'CRM' },
+    ] : []),
+    ...(dbUser?.role === 'admin' || dbUser?.permissions?.canManageUsers || dbUser?.permissions?.canManageRoles ? [
       { to: '/admin/users', icon: Shield, label: 'Users & Roles' },
     ] : []),
     { to: '/dashboard', icon: LayoutDashboard, label: 'My Dashboard' },

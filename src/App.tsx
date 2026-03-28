@@ -11,17 +11,35 @@ import { ProjectChat } from './pages/ProjectChat';
 import { Profile } from './pages/Profile';
 import { AdminCRM } from './pages/AdminCRM';
 import { AdminUsers } from './pages/AdminUsers';
+import { RoleManagement } from './pages/RoleManagement';
 import { Layout } from './components/Layout';
 import { Preloader } from './components/Preloader';
+import { RolePermissions } from './types';
 
-function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
+function ProtectedRoute({ 
+  children, 
+  requireAdmin = false,
+  permission 
+}: { 
+  children: React.ReactNode, 
+  requireAdmin?: boolean,
+  permission?: keyof RolePermissions
+}) {
   const { user, dbUser, loading } = useAuth();
 
   if (loading) return <Preloader />;
 
   if (!user || !dbUser) return <Navigate to="/login" replace />;
 
-  if (requireAdmin && dbUser.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  // If it's an admin route, check for admin role or canAccessAdminDashboard
+  if (requireAdmin && dbUser.role !== 'admin' && !dbUser.permissions?.canAccessAdminDashboard) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If a specific permission is required, check it
+  if (permission && dbUser.role !== 'admin' && !dbUser.permissions?.[permission]) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return <>{children}</>;
 }
@@ -39,6 +57,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <UserDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="projects/:projectId" 
+              element={
+                <ProtectedRoute>
+                  <ProjectDetails />
                 </ProtectedRoute>
               } 
             />
@@ -69,7 +95,7 @@ export default function App() {
             <Route 
               path="admin/create-task" 
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requireAdmin permission="canCreateTasks">
                   <CreateTask />
                 </ProtectedRoute>
               } 
@@ -77,23 +103,15 @@ export default function App() {
             <Route 
               path="admin/create-project" 
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requireAdmin permission="canCreateProjects">
                   <CreateProject />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="admin/projects/:projectId" 
-              element={
-                <ProtectedRoute requireAdmin>
-                  <ProjectDetails />
                 </ProtectedRoute>
               } 
             />
             <Route 
               path="admin/crm" 
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requireAdmin permission="canManageCRM">
                   <AdminCRM />
                 </ProtectedRoute>
               } 
@@ -101,8 +119,16 @@ export default function App() {
             <Route 
               path="admin/users" 
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requireAdmin permission="canManageUsers">
                   <AdminUsers />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="admin/roles" 
+              element={
+                <ProtectedRoute requireAdmin permission="canManageRoles">
+                  <RoleManagement />
                 </ProtectedRoute>
               } 
             />

@@ -67,6 +67,17 @@ service cloud.firestore {
       );
     }
 
+    function hasPermission(permission) {
+      return isAuthenticated() && (
+        isAdmin() || (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role != 'user' &&
+          exists(/databases/$(database)/documents/roles/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role)) &&
+          get(/databases/$(database)/documents/roles/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role)).data.permissions[permission] == true
+        )
+      );
+    }
+
     function hasOnlyAllowedFields(fields) {
       return request.resource.data.keys().hasOnly(fields);
     }
@@ -105,11 +116,18 @@ service cloud.firestore {
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
              isValidEmail(data.email) &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
-             data.role in ['admin', 'user'];
+             data.role is string && data.role.size() > 0;
+    }
+
+    function isValidRole(data) {
+      return hasOnlyAllowedFields(['name', 'permissions']) &&
+             hasRequiredFields(['name', 'permissions']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.permissions is map;
     }
 
     function isValidProject(data) {
-      return hasOnlyAllowedFields(['name', 'status', 'installationDate', 'progress', 'assignedUsers', 'projectManagerId', 'coordinatorIds', 'customerName', 'customerDetails']) &&
+      return hasOnlyAllowedFields(['name', 'status', 'installationDate', 'progress', 'assignedUsers', 'projectManagerId', 'coordinatorIds', 'memberIds', 'customerName', 'customerDetails']) &&
              hasRequiredFields(['name', 'status', 'installationDate', 'progress']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.status in ['active', 'completed'] &&
@@ -118,6 +136,7 @@ service cloud.firestore {
              (!('assignedUsers' in data) || data.assignedUsers is list) &&
              (!('projectManagerId' in data) || data.projectManagerId is string) &&
              (!('coordinatorIds' in data) || data.coordinatorIds is list) &&
+             (!('memberIds' in data) || data.memberIds is list) &&
              (!('customerName' in data) || data.customerName is string) &&
              (!('customerDetails' in data) || data.customerDetails is string);
     }
@@ -166,21 +185,26 @@ service cloud.firestore {
 
     // Collections
     match /users/{userId} {
-      // Read: Owner or Admin
-      allow read: if isOwner(userId) || isAdmin();
+      // Read: Owner or Admin or anyone with canManageUsers
+      allow read: if isOwner(userId) || isAdmin() || hasPermission('canManageUsers');
       
       // Create: Users can create their own profile. They cannot set themselves as admin unless they are the bootstrapped admin.
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
-        (isOwner(userId) && uidUnchanged() && request.resource.data.role == 'user') || isAdmin()
+        (isOwner(userId) && uidUnchanged() && request.resource.data.role == 'user') || isAdmin() || hasPermission('canManageUsers')
       );
       
       // Update: Owner can update their displayName, but not their role. Admin can update anything.
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && uidNotModified() && (
-        (isOwner(userId) && request.resource.data.role == resource.data.role && areImmutableFieldsUnchanged(['uid', 'email'])) || isAdmin()
+        (isOwner(userId) && request.resource.data.role == resource.data.role && areImmutableFieldsUnchanged(['uid', 'email'])) || isAdmin() || hasPermission('canManageUsers')
       );
       
-      // Delete: Admin only
-      allow delete: if isAdmin();
+      // Delete: Admin or canManageUsers
+      allow delete: if isAdmin() || hasPermission('canManageUsers');
+    }
+
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || hasPermission('canManageRoles');
     }
 
     function isProjectMember(projectId) {
@@ -189,7 +213,8 @@ service cloud.firestore {
       let isPM = projExists && proj.get('projectManagerId', '') == request.auth.uid;
       let isCoord = projExists && request.auth.uid in proj.get('coordinatorIds', []);
       let isAssigned = projExists && request.auth.uid in proj.get('assignedUsers', []);
-      return isPM || isCoord || isAssigned;
+      let isMember = projExists && request.auth.uid in proj.get('memberIds', []);
+      return isPM || isCoord || isAssigned || isMember;
     }
 
     function canAccessProjectChat(projectId) {
@@ -215,34 +240,34 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      // Read: Authenticated users
-      allow read: if isAuthenticated();
+      // Read: Admin or Project Member or canAccessAdminDashboard
+      allow read: if isAdmin() || hasPermission('canAccessAdminDashboard') || (isAuthenticated() && request.auth.uid in resource.data.get('memberIds', []));
       
-      // Write: Admin only
-      allow create: if isAdmin() && isValidProject(request.resource.data);
-      allow update: if isAdmin() && isValidProject(request.resource.data);
-      allow delete: if isAdmin();
+      // Write: Admin can create/delete. Admin, PM, or Coordinator can update.
+      allow create: if (isAdmin() || hasPermission('canCreateProjects')) && isValidProject(request.resource.data);
+      allow update: if (isAdmin() || hasPermission('canEditProjects') || isProjectMember(projectId)) && isValidProject(request.resource.data);
+      allow delete: if (isAdmin() || hasPermission('canDeleteProjects')) && isValidProject(request.resource.data);
     }
 
     match /tasks/{taskId} {
-      // Read: Authenticated users
-      allow read: if isAuthenticated();
+      // Read: Admin or Project Member or canAccessAdminDashboard
+      allow read: if isAdmin() || hasPermission('canAccessAdminDashboard') || (isAuthenticated() && isProjectMember(resource.data.projectId));
       
-      // Create/Delete: Admin only
-      allow create: if isAdmin() && isValidTask(request.resource.data);
-      allow delete: if isAdmin();
+      // Create/Delete: Admin or canCreateTasks/canDeleteTasks
+      allow create: if (isAdmin() || hasPermission('canCreateTasks')) && isValidTask(request.resource.data);
+      allow delete: if (isAdmin() || hasPermission('canDeleteTasks')) && isValidTask(request.resource.data);
       
-      // Update: Admin OR Assigned User (who can only update progress and notes)
+      // Update: Admin OR Assigned User OR canEditTasks
       allow update: if isAuthenticated() && isValidTask(request.resource.data) && (
-        isAdmin() || 
+        isAdmin() || hasPermission('canEditTasks') ||
         (resource.data.assignedUserId == request.auth.uid && 
          areImmutableFieldsUnchanged(['projectId', 'title', 'assignedUserId', 'deadline', 'priority']))
       );
     }
 
     match /workLogs/{logId} {
-      // Read: Owner or Admin
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      // Read: Owner or Admin or canViewAllWorkLogs
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || hasPermission('canViewAllWorkLogs'));
       
       // Create: Owner (punching in)
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidWorkLog(request.resource.data);
@@ -250,32 +275,32 @@ service cloud.firestore {
       // Update: Owner (punching out)
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidWorkLog(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'punchIn']);
       
-      // Delete: Admin only
-      allow delete: if isAdmin();
+      // Delete: Admin or canViewAllWorkLogs?
+      allow delete: if isAdmin() || hasPermission('canViewAllWorkLogs');
     }
 
     match /notifications/{notificationId} {
-      // Read: Admin
-      allow read: if isAdmin();
+      // Read: Admin or canAccessAdminDashboard
+      allow read: if isAdmin() || hasPermission('canAccessAdminDashboard');
       
       // Create: Authenticated users (when they update a task)
       allow create: if isAuthenticated() && isValidNotification(request.resource.data);
       
-      // Update: Admin (marking as read)
-      allow update: if isAdmin() && isValidNotification(request.resource.data);
+      // Update: Admin or canAccessAdminDashboard
+      allow update: if (isAdmin() || hasPermission('canAccessAdminDashboard')) && isValidNotification(request.resource.data);
       
       // Delete: Admin
       allow delete: if isAdmin();
     }
 
     match /customers/{customerId} {
-      // Read: Authenticated users (so they can be assigned or viewed)
-      allow read: if isAuthenticated();
+      // Read: Admin or canManageCRM
+      allow read: if isAdmin() || hasPermission('canManageCRM');
       
-      // Write: Admin only
-      allow create: if isAdmin() && isValidCustomer(request.resource.data);
-      allow update: if isAdmin() && isValidCustomer(request.resource.data);
-      allow delete: if isAdmin();
+      // Write: Admin or canManageCRM
+      allow create: if (isAdmin() || hasPermission('canManageCRM')) && isValidCustomer(request.resource.data);
+      allow update: if (isAdmin() || hasPermission('canManageCRM')) && isValidCustomer(request.resource.data);
+      allow delete: if (isAdmin() || hasPermission('canManageCRM')) && isValidCustomer(request.resource.data);
     }
   }
 }

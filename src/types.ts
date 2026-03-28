@@ -1,12 +1,31 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type Role = 'admin' | 'user';
+export interface RolePermissions {
+  canCreateProjects: boolean;
+  canEditProjects: boolean;
+  canDeleteProjects: boolean;
+  canCreateTasks: boolean;
+  canEditTasks: boolean;
+  canDeleteTasks: boolean;
+  canManageUsers: boolean;
+  canViewAllWorkLogs: boolean;
+  canManageRoles: boolean;
+  canAccessAdminDashboard: boolean;
+  canManageCRM: boolean;
+}
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  permissions: RolePermissions;
+}
 
 export interface User {
   uid: string;
   email: string;
   displayName: string;
-  role: Role;
+  role: string; // Can be 'admin', 'user', or a custom role ID
+  permissions?: RolePermissions; // Optional: store permissions on the user for easy access
 }
 
 export interface Project {
@@ -18,6 +37,7 @@ export interface Project {
   assignedUsers?: string[];
   projectManagerId?: string;
   coordinatorIds?: string[];
+  memberIds?: string[];
   customerName?: string;
   customerDetails?: string;
 }

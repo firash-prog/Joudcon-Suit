@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db } from '../firebase';
-import { User, Role } from '../types';
-import { Users, Plus, Edit2, Trash2, Shield, User as UserIcon, X, Search, AlertCircle, Key, Mail, BadgeCheck } from 'lucide-react';
+import { User, CustomRole } from '../types';
+import { Users, Plus, Edit2, Trash2, Shield, User as UserIcon, X, Search, AlertCircle, Key, Mail, BadgeCheck, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { sounds } from '../lib/sounds';
+import { useAuth } from '../contexts/AuthContext';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize a secondary app for creating users without logging out the admin
@@ -14,7 +16,9 @@ const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
 const secondaryAuth = getAuth(secondaryApp);
 
 export function AdminUsers() {
+  const { dbUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<CustomRole[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,15 +27,21 @@ export function AdminUsers() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<Role>('user');
+  const [role, setRole] = useState('user');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as User)));
     });
-    return () => unsub();
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
+      setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() } as CustomRole)));
+    });
+    return () => {
+      unsubUsers();
+      unsubRoles();
+    };
   }, []);
 
   const resetForm = () => {
@@ -122,17 +132,30 @@ export function AdminUsers() {
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Personnel & Permission Management</p>
           </div>
         </div>
-        <button 
-          onClick={() => {
-            sounds.play('click');
-            setIsModalOpen(true);
-          }}
-          onMouseEnter={() => sounds.play('hover')}
-          className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
-        >
-          <Plus className="w-5 h-5" />
-          Initialize Agent
-        </button>
+        <div className="flex items-center gap-4">
+          {(dbUser?.role === 'admin' || dbUser?.permissions?.canManageRoles) && (
+            <Link 
+              to="/admin/roles"
+              onMouseEnter={() => sounds.play('hover')}
+              onClick={() => sounds.play('click')}
+              className="bg-white/5 hover:bg-white/10 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all border border-white/10"
+            >
+              <Shield className="w-5 h-5" />
+              Manage Roles
+            </Link>
+          )}
+          <button 
+            onClick={() => {
+              sounds.play('click');
+              setIsModalOpen(true);
+            }}
+            onMouseEnter={() => sounds.play('hover')}
+            className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
+          >
+            <Plus className="w-5 h-5" />
+            Initialize Agent
+          </button>
+        </div>
       </div>
 
       <div className="glass-card rounded-[40px] overflow-hidden border-white/5">
@@ -197,10 +220,14 @@ export function AdminUsers() {
                       <td className="px-8 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{user.email}</td>
                       <td className="px-8 py-5">
                         <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border flex items-center gap-2 w-fit ${
-                          user.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                          user.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
+                          user.role === 'user' ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20' :
+                          'bg-brand-orange/10 text-brand-orange border-brand-orange/20'
                         }`}>
-                          {user.role === 'admin' ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
-                          {user.role}
+                          {user.role === 'admin' ? <Shield className="w-3 h-3" /> : 
+                           user.role === 'user' ? <UserIcon className="w-3 h-3" /> :
+                           <Zap className="w-3 h-3" />}
+                          {roles.find(r => r.id === user.role)?.name || user.role}
                         </span>
                       </td>
                       <td className="px-8 py-5 text-right">
@@ -326,11 +353,14 @@ export function AdminUsers() {
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Clearance Level *</label>
                   <select 
                     value={role}
-                    onChange={e => setRole(e.target.value as Role)}
+                    onChange={e => setRole(e.target.value)}
                     className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
                   >
                     <option value="user">Standard Agent</option>
                     <option value="admin">Strategic Admin</option>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
                   </select>
                 </div>
 

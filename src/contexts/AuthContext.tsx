@@ -29,7 +29,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
-          setDbUser(userSnap.data() as User);
+          const userData = userSnap.data() as User;
+          
+          // If custom role, fetch permissions
+          if (userData.role !== 'admin' && userData.role !== 'user') {
+            const roleRef = doc(db, 'roles', userData.role);
+            const roleSnap = await getDoc(roleRef);
+            if (roleSnap.exists()) {
+              userData.permissions = roleSnap.data().permissions;
+            }
+          } else if (userData.role === 'admin') {
+            userData.permissions = {
+              canCreateProjects: true,
+              canEditProjects: true,
+              canDeleteProjects: true,
+              canCreateTasks: true,
+              canEditTasks: true,
+              canDeleteTasks: true,
+              canManageUsers: true,
+              canViewAllWorkLogs: true,
+              canManageRoles: true,
+              canAccessAdminDashboard: true,
+              canManageCRM: true,
+            };
+          } else {
+            userData.permissions = {
+              canCreateProjects: false,
+              canEditProjects: false,
+              canDeleteProjects: false,
+              canCreateTasks: false,
+              canEditTasks: false,
+              canDeleteTasks: false,
+              canManageUsers: false,
+              canViewAllWorkLogs: false,
+              canManageRoles: false,
+              canAccessAdminDashboard: false,
+              canManageCRM: false,
+            };
+          }
+          
+          setDbUser(userData);
         } else {
           // Check if admin
           const isAdmin = firebaseUser.email === 'firash@eliteproeventsksa.com' || firebaseUser.email === 'admin@joudcon.com' || firebaseUser.email === 'bossjoudcon@joudcon.com';

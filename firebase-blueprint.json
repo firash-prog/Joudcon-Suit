@@ -95,9 +95,37 @@
         "createdAt": { "type": "timestamp" }
       },
       "required": ["name", "status", "createdAt"]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "A custom user role with specific permissions.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the role." },
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "canCreateProjects": { "type": "boolean" },
+            "canEditProjects": { "type": "boolean" },
+            "canDeleteProjects": { "type": "boolean" },
+            "canCreateTasks": { "type": "boolean" },
+            "canEditTasks": { "type": "boolean" },
+            "canDeleteTasks": { "type": "boolean" },
+            "canManageUsers": { "type": "boolean" },
+            "canViewAllWorkLogs": { "type": "boolean" },
+            "canManageRoles": { "type": "boolean" },
+            "canAccessAdminDashboard": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["name", "permissions"]
     }
   },
   "firestore": {
+    "/roles/{roleId}": {
+      "schema": { "$ref": "#/entities/Role" },
+      "description": "Stores custom role definitions."
+    },
     "/messages/{messageId}": {
       "schema": { "$ref": "#/entities/messages" },
       "description": "Project group chat messages."

@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot, updateDoc, doc, addDoc, Timestamp
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Task, Project, WorkLog } from '../types';
-import { Clock, MessageSquare, Send, CheckCircle2, Play, Square, Zap, Activity } from 'lucide-react';
+import { Clock, MessageSquare, Send, CheckCircle2, Play, Square, Zap, Activity, LayoutGrid } from 'lucide-react';
 import { formatDistanceToNow, differenceInSeconds } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import * as Slider from '@radix-ui/react-slider';
@@ -63,7 +63,8 @@ export function UserDashboard() {
       setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
     });
 
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snap) => {
+    const qProjects = query(collection(db, 'projects'), where('memberIds', 'array-contains', dbUser.uid));
+    const unsubProjects = onSnapshot(qProjects, (snap) => {
       setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Project)));
     });
 
@@ -333,15 +334,26 @@ export function UserDashboard() {
                       )}
                       
                       {project && (
-                        <Link 
-                          to={`/projects/${project.id}/chat`}
-                          onMouseEnter={() => sounds.play('hover')}
-                          onClick={() => sounds.play('click')}
-                          className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl glass-dark text-[10px] font-black uppercase tracking-widest text-brand-orange hover:bg-brand-orange/10 transition-all"
-                        >
-                          <Zap className="w-4 h-4" />
-                          Project Secure Chat
-                        </Link>
+                        <div className="flex gap-3">
+                          <Link 
+                            to={`/projects/${project.id}`}
+                            onMouseEnter={() => sounds.play('hover')}
+                            onClick={() => sounds.play('click')}
+                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl glass-dark text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
+                          >
+                            <LayoutGrid className="w-4 h-4" />
+                            Mission Details
+                          </Link>
+                          <Link 
+                            to={`/projects/${project.id}/chat`}
+                            onMouseEnter={() => sounds.play('hover')}
+                            onClick={() => sounds.play('click')}
+                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl glass-dark text-[10px] font-black uppercase tracking-widest text-brand-orange hover:bg-brand-orange/10 transition-all"
+                          >
+                            <Zap className="w-4 h-4" />
+                            Project Secure Chat
+                          </Link>
+                        </div>
                       )}
                     </div>
                   </motion.div>

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, onSnapshot, updateDoc, deleteDoc, doc, where } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Project, Task, User, Notification } from '../types';
-import { Plus, Trash2, AlertCircle, Clock, Calendar, CheckCircle2, MessageSquare, TrendingUp, Activity, Zap, Bell } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Project, Task, User, Notification, RolePermissions } from '../types';
+import { Plus, Trash2, AlertCircle, Clock, Calendar, CheckCircle2, MessageSquare, TrendingUp, Activity, Zap, Bell, Shield } from 'lucide-react';
 import { formatDistanceToNow, isBefore, addHours, differenceInSeconds } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { sounds } from '../lib/sounds';
@@ -41,6 +42,7 @@ const itemVariants = {
 };
 
 export function AdminDashboard() {
+  const { dbUser } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -184,15 +186,30 @@ export function AdminDashboard() {
               <div className="w-1.5 h-6 bg-brand-orange rounded-full" />
               <h3 className="text-xl font-black text-white tracking-tight uppercase">Active Projects</h3>
             </div>
-            <Link 
-              to="/admin/create-project" 
-              onMouseEnter={() => sounds.play('hover')}
-              onClick={() => sounds.play('click')}
-              className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-6 py-2.5 rounded-2xl text-sm font-black uppercase tracking-wider flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
-            >
-              <Plus className="w-5 h-5" />
-              Create Project
-            </Link>
+            <div className="flex items-center gap-4">
+              {(dbUser?.role === 'admin' || dbUser?.permissions?.canCreateProjects) && (
+                <Link 
+                  to="/admin/create-project" 
+                  onMouseEnter={() => sounds.play('hover')}
+                  onClick={() => sounds.play('click')}
+                  className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-6 py-2.5 rounded-2xl text-sm font-black uppercase tracking-wider flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Project
+                </Link>
+              )}
+              {(dbUser?.role === 'admin' || dbUser?.permissions?.canManageRoles) && (
+                <Link 
+                  to="/admin/roles" 
+                  onMouseEnter={() => sounds.play('hover')}
+                  onClick={() => sounds.play('click')}
+                  className="bg-white/5 hover:bg-white/10 text-white px-6 py-2.5 rounded-2xl text-sm font-black uppercase tracking-wider flex items-center gap-2 transition-all hover:scale-105 active:scale-95 border border-white/10"
+                >
+                  <Shield className="w-5 h-5" />
+                  Manage Roles
+                </Link>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode="popLayout">
@@ -211,7 +228,7 @@ export function AdminDashboard() {
                     onMouseEnter={() => sounds.play('hover')}
                     onClick={() => {
                       sounds.play('click');
-                      navigate(`/admin/projects/${project.id}`);
+                      navigate(`/projects/${project.id}`);
                     }}
                     className={`glass-card rounded-3xl p-6 relative overflow-hidden cursor-pointer transition-all duration-300 group ${isUrgent ? 'border-red-500/40 shadow-[0_0_30px_rgba(239,68,68,0.1)]' : 'hover:border-brand-orange/30'}`}
                   >
@@ -293,15 +310,17 @@ export function AdminDashboard() {
               <Activity className="w-5 h-5 text-brand-blue" />
               <h3 className="text-lg font-black text-white uppercase tracking-tight">Task Matrix</h3>
             </div>
-            <Link 
-              to="/admin/create-task" 
-              onMouseEnter={() => sounds.play('hover')}
-              onClick={() => sounds.play('click')}
-              className="text-xs font-black text-brand-blue hover:text-brand-orange transition-colors uppercase tracking-widest flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              New Task
-            </Link>
+            {(dbUser?.role === 'admin' || dbUser?.permissions?.canCreateTasks) && (
+              <Link 
+                to="/admin/create-task" 
+                onMouseEnter={() => sounds.play('hover')}
+                onClick={() => sounds.play('click')}
+                className="text-xs font-black text-brand-blue hover:text-brand-orange transition-colors uppercase tracking-widest flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                New Task
+              </Link>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -354,13 +373,15 @@ export function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => handleDeleteTask(task.id)} 
-                          onMouseEnter={() => sounds.play('hover')}
-                          className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {(dbUser?.role === 'admin' || dbUser?.permissions?.canDeleteTasks) && (
+                          <button 
+                            onClick={() => handleDeleteTask(task.id)} 
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

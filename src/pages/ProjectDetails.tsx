@@ -1,25 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { doc, collection, query, where, onSnapshot, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, where, onSnapshot, deleteDoc, addDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { Project, Task, User } from '../types';
-import { ArrowLeft, Calendar, Users, Trash2, Plus, MessageSquare, Briefcase, UserCheck, Clock, CheckCircle2, LayoutGrid, Info } from 'lucide-react';
+import { ArrowLeft, Calendar, Users, Trash2, Plus, MessageSquare, Briefcase, UserCheck, Clock, CheckCircle2, LayoutGrid, Info, Edit3, Save, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { sounds } from '../lib/sounds';
 
 export function ProjectDetails() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { dbUser } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [newTask, setNewTask] = useState({ title: '', assignedUserId: '', deadline: '', priority: 'medium' });
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    status: 'active' as 'active' | 'completed',
+    installationDate: '',
+    customerName: '',
+    customerDetails: ''
+  });
+
+  const isAdmin = dbUser?.role === 'admin';
+  const isPM = project?.projectManagerId === dbUser?.uid;
+  const isCoordinator = project?.coordinatorIds?.includes(dbUser?.uid || '');
+  const canEdit = isAdmin || isPM || isCoordinator || dbUser?.permissions?.canEditProjects;
+  const canDelete = isAdmin || dbUser?.permissions?.canDeleteProjects;
+  const canCreateTasks = isAdmin || dbUser?.permissions?.canCreateTasks;
+  const canDeleteTasks = isAdmin || dbUser?.permissions?.canDeleteTasks;
 
   useEffect(() => {
     if (!projectId) return;
     const unsubProject = onSnapshot(doc(db, 'projects', projectId), (docSnap) => {
       if (docSnap.exists()) {
-        setProject({ id: docSnap.id, ...docSnap.data() } as Project);
+        const data = { id: docSnap.id, ...docSnap.data() } as Project;
+        setProject(data);
+        setEditForm({
+          name: data.name,
+          status: data.status,
+          installationDate: data.installationDate.toDate().toISOString().slice(0, 16),
+          customerName: data.customerName || '',
+          customerDetails: data.customerDetails || ''
+        });
       }
     });
     const unsubTasks = onSnapshot(query(collection(db, 'tasks'), where('projectId', '==', projectId)), (snap) => {
@@ -30,6 +56,25 @@ export function ProjectDetails() {
     });
     return () => { unsubProject(); unsubTasks(); unsubUsers(); };
   }, [projectId]);
+
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !canEdit) return;
+    try {
+      await updateDoc(doc(db, 'projects', projectId), {
+        name: editForm.name,
+        status: editForm.status,
+        installationDate: Timestamp.fromDate(new Date(editForm.installationDate)),
+        customerName: editForm.customerName,
+        customerDetails: editForm.customerDetails
+      });
+      sounds.play('success');
+      setIsEditing(false);
+    } catch (err) {
+      sounds.play('error');
+      console.error(err);
+    }
+  };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +102,21 @@ export function ProjectDetails() {
       try {
         await deleteDoc(doc(db, 'tasks', taskId));
         sounds.play('success');
+      } catch (err) {
+        sounds.play('error');
+        console.error(err);
+      }
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!projectId || !canDelete) return;
+    sounds.play('click');
+    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      try {
+        await deleteDoc(doc(db, 'projects', projectId));
+        sounds.play('success');
+        navigate(isAdmin ? "/admin" : "/dashboard");
       } catch (err) {
         sounds.play('error');
         console.error(err);
@@ -100,7 +160,7 @@ export function ProjectDetails() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-6">
           <Link 
-            to="/admin" 
+            to={isAdmin ? "/admin" : "/dashboard"} 
             onMouseEnter={() => sounds.play('hover')}
             onClick={() => sounds.play('click')}
             className="w-12 h-12 glass-dark hover:bg-white/10 text-slate-400 hover:text-white rounded-2xl flex items-center justify-center transition-all border border-white/5 active:scale-90"
@@ -125,19 +185,131 @@ export function ProjectDetails() {
             )}
           </div>
         </div>
-        <Link 
-          to={`/projects/${project.id}/chat`}
-          onMouseEnter={() => sounds.play('hover')}
-          onClick={() => sounds.play('click')}
-          className="bg-brand-blue hover:bg-brand-blue/90 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,122,255,0.2)]"
-        >
-          <MessageSquare className="w-5 h-5" />
-          Secure Group Chat
-        </Link>
+        <div className="flex items-center gap-4">
+          {canEdit && (
+            <button 
+              onClick={() => {
+                sounds.play('click');
+                setIsEditing(!isEditing);
+              }}
+              onMouseEnter={() => sounds.play('hover')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border border-white/5 active:scale-90 ${
+                isEditing ? 'bg-brand-orange text-brand-dark' : 'glass-dark text-slate-400 hover:text-white'
+              }`}
+            >
+              <Edit3 className="w-6 h-6" />
+            </button>
+          )}
+          {canDelete && (
+            <button 
+              onClick={handleDeleteProject}
+              onMouseEnter={() => sounds.play('hover')}
+              className="w-12 h-12 glass-dark hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-2xl flex items-center justify-center transition-all border border-white/5 active:scale-90"
+            >
+              <Trash2 className="w-6 h-6" />
+            </button>
+          )}
+          <Link 
+            to={`/projects/${project.id}/chat`}
+            onMouseEnter={() => sounds.play('hover')}
+            onClick={() => sounds.play('click')}
+            className="bg-brand-blue hover:bg-brand-blue/90 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,122,255,0.2)]"
+          >
+            <MessageSquare className="w-5 h-5" />
+            Secure Group Chat
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-10">
+          {/* Edit Project Section */}
+          <AnimatePresence>
+            {isEditing && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="glass-card rounded-[40px] p-8 border-brand-orange/20 overflow-hidden"
+              >
+                <form onSubmit={handleUpdateProject} className="space-y-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Modify Mission Parameters</h3>
+                    <button 
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                      className="text-slate-500 hover:text-white transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Mission Designation</label>
+                      <input 
+                        type="text"
+                        required
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                        value={editForm.name}
+                        onChange={e => setEditForm({...editForm, name: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Operational Status</label>
+                      <select 
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                        value={editForm.status}
+                        onChange={e => setEditForm({...editForm, status: e.target.value as any})}
+                      >
+                        <option value="active">ACTIVE</option>
+                        <option value="completed">COMPLETED</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Deployment Deadline</label>
+                      <input 
+                        type="datetime-local"
+                        required
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                        value={editForm.installationDate}
+                        onChange={e => setEditForm({...editForm, installationDate: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Strategic Client</label>
+                      <input 
+                        type="text"
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                        value={editForm.customerName}
+                        onChange={e => setEditForm({...editForm, customerName: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Strategic Requirements</label>
+                    <textarea 
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-orange/30 transition-all min-h-[100px]"
+                      value={editForm.customerDetails}
+                      onChange={e => setEditForm({...editForm, customerDetails: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-4">
+                    <button 
+                      type="submit"
+                      className="bg-brand-orange text-brand-dark px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      <Save className="w-4 h-4" />
+                      Commit Changes
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Tasks Section */}
           <motion.div variants={itemVariants} className="glass-card rounded-[40px] p-8 border-white/5 relative overflow-hidden group">
             <div className="absolute inset-0 shimmer-bg opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none" />
@@ -151,46 +323,48 @@ export function ProjectDetails() {
             </div>
             
             {/* Add Task Form */}
-            <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10 bg-white/2 p-6 rounded-[32px] border border-white/5">
-              <div className="md:col-span-2">
-                <input 
-                  type="text" 
-                  placeholder="TASK OBJECTIVE..." 
-                  required
-                  className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all placeholder:text-slate-600"
-                  value={newTask.title}
-                  onChange={e => setNewTask({...newTask, title: e.target.value})}
-                />
-              </div>
-              <div>
-                <select 
-                  required
-                  className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
-                  value={newTask.assignedUserId}
-                  onChange={e => setNewTask({...newTask, assignedUserId: e.target.value})}
-                >
-                  <option value="">ASSIGN AGENT</option>
-                  {projectUsers.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-4">
-                <input 
-                  type="datetime-local" 
-                  required
-                  className="flex-1 bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all"
-                  value={newTask.deadline}
-                  onChange={e => setNewTask({...newTask, deadline: e.target.value})}
-                />
-                <button 
-                  type="submit" 
-                  onMouseEnter={() => sounds.play('hover')}
-                  onClick={() => sounds.play('click')}
-                  className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark p-4 rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
-                >
-                  <Plus className="w-6 h-6" />
-                </button>
-              </div>
-            </form>
+            {canCreateTasks && (
+              <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10 bg-white/2 p-6 rounded-[32px] border border-white/5">
+                <div className="md:col-span-2">
+                  <input 
+                    type="text" 
+                    placeholder="TASK OBJECTIVE..." 
+                    required
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all placeholder:text-slate-600"
+                    value={newTask.title}
+                    onChange={e => setNewTask({...newTask, title: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <select 
+                    required
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
+                    value={newTask.assignedUserId}
+                    onChange={e => setNewTask({...newTask, assignedUserId: e.target.value})}
+                  >
+                    <option value="">ASSIGN AGENT</option>
+                    {projectUsers.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-4">
+                  <input 
+                    type="datetime-local" 
+                    required
+                    className="flex-1 bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                    value={newTask.deadline}
+                    onChange={e => setNewTask({...newTask, deadline: e.target.value})}
+                  />
+                  <button 
+                    type="submit" 
+                    onMouseEnter={() => sounds.play('hover')}
+                    onClick={() => sounds.play('click')}
+                    className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark p-4 rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
+                  >
+                    <Plus className="w-6 h-6" />
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Task List */}
             <div className="space-y-4">
@@ -242,9 +416,16 @@ export function ProjectDetails() {
                             <span className="text-xl font-black text-white font-mono">{task.progress}%</span>
                           </div>
                           <button 
-                            onClick={() => handleDeleteTask(task.id)}
+                            onClick={() => {
+                              if (canDeleteTasks) {
+                                sounds.play('click');
+                                handleDeleteTask(task.id);
+                              }
+                            }}
                             onMouseEnter={() => sounds.play('hover')}
-                            className="w-10 h-10 flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all opacity-0 group-hover:opacity-100 ${
+                              canDeleteTasks ? 'text-slate-600 hover:text-red-400 hover:bg-red-400/10' : 'hidden'
+                            }`}
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>

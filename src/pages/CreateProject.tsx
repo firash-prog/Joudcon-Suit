@@ -65,6 +65,12 @@ export function CreateProject() {
     
     setIsSubmitting(true);
     try {
+      const memberIds = Array.from(new Set([
+        newProject.projectManagerId,
+        ...newProject.coordinatorIds,
+        ...newProject.assignedUsers
+      ])).filter(Boolean) as string[];
+
       await addDoc(collection(db, 'projects'), {
         name: newProject.name,
         status: 'active',
@@ -73,6 +79,7 @@ export function CreateProject() {
         projectManagerId: newProject.projectManagerId || null,
         coordinatorIds: newProject.coordinatorIds,
         assignedUsers: newProject.assignedUsers,
+        memberIds,
         customerName: newProject.customerName || null,
         customerDetails: newProject.customerDetails || null
       });
