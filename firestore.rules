@@ -1,0 +1,281 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, valid email)
+    //   - displayName: string (required)
+    //   - role: string (required, 'admin' | 'user')
+    //
+    // Collection: projects
+    // Document ID: {projectId}
+    // Fields:
+    //   - name: string (required)
+    //   - status: string (required, 'active' | 'completed')
+    //   - installationDate: timestamp (required)
+    //   - progress: number (required, 0-100)
+    //
+    // Collection: tasks
+    // Document ID: {taskId}
+    // Fields:
+    //   - projectId: string (required)
+    //   - title: string (required)
+    //   - assignedUserId: string (required)
+    //   - deadline: timestamp (required)
+    //   - priority: string (required, 'low' | 'medium' | 'high')
+    //   - progress: number (required, 0-100)
+    //   - notes: string (optional)
+    //
+    // Collection: workLogs
+    // Document ID: {logId}
+    // Fields:
+    //   - userId: string (required)
+    //   - punchIn: timestamp (required)
+    //   - punchOut: timestamp (optional)
+    //   - hours: number (optional)
+    //
+    // Collection: notifications
+    // Document ID: {notificationId}
+    // Fields:
+    //   - message: string (required)
+    //   - createdAt: timestamp (required)
+    //   - read: boolean (required)
+    //   - type: string (required, 'task_update' | 'message')
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == "firash@eliteproeventsksa.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "admin@joudcon.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "bossjoudcon@joudcon.com")
+      );
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'role']) &&
+             hasRequiredFields(['uid', 'email', 'displayName', 'role']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.role in ['admin', 'user'];
+    }
+
+    function isValidProject(data) {
+      return hasOnlyAllowedFields(['name', 'status', 'installationDate', 'progress', 'assignedUsers', 'projectManagerId', 'coordinatorIds', 'customerName', 'customerDetails']) &&
+             hasRequiredFields(['name', 'status', 'installationDate', 'progress']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.status in ['active', 'completed'] &&
+             data.installationDate is timestamp &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             (!('assignedUsers' in data) || data.assignedUsers is list) &&
+             (!('projectManagerId' in data) || data.projectManagerId is string) &&
+             (!('coordinatorIds' in data) || data.coordinatorIds is list) &&
+             (!('customerName' in data) || data.customerName is string) &&
+             (!('customerDetails' in data) || data.customerDetails is string);
+    }
+
+    function isValidTask(data) {
+      return hasOnlyAllowedFields(['projectId', 'title', 'assignedUserId', 'deadline', 'priority', 'progress', 'notes']) &&
+             hasRequiredFields(['projectId', 'title', 'assignedUserId', 'deadline', 'priority', 'progress']) &&
+             data.projectId is string && data.projectId.size() > 0 && data.projectId.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 150 &&
+             data.assignedUserId is string && data.assignedUserId.size() > 0 && data.assignedUserId.size() < 100 &&
+             data.deadline is timestamp &&
+             data.priority in ['low', 'medium', 'high'] &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000));
+    }
+
+    function isValidWorkLog(data) {
+      return hasOnlyAllowedFields(['userId', 'punchIn', 'punchOut', 'hours']) &&
+             hasRequiredFields(['userId', 'punchIn']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.punchIn is timestamp &&
+             (!('punchOut' in data) || data.punchOut is timestamp) &&
+             (!('hours' in data) || (data.hours is number && data.hours >= 0 && data.hours <= 24));
+    }
+
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['message', 'createdAt', 'read', 'type']) &&
+             hasRequiredFields(['message', 'createdAt', 'read', 'type']) &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 500 &&
+             data.createdAt is timestamp &&
+             data.read is bool &&
+             data.type in ['task_update', 'message'];
+    }
+
+    function isValidCustomer(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'phone', 'company', 'status', 'notes', 'createdAt']) &&
+             hasRequiredFields(['name', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('email' in data) || data.email == '' || isValidEmail(data.email)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 50)) &&
+             (!('company' in data) || (data.company is string && data.company.size() <= 100)) &&
+             data.status in ['lead', 'active', 'inactive'] &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             data.createdAt is timestamp;
+    }
+
+    // Collections
+    match /users/{userId} {
+      // Read: Owner or Admin
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Create: Users can create their own profile. They cannot set themselves as admin unless they are the bootstrapped admin.
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && uidUnchanged() && request.resource.data.role == 'user') || isAdmin()
+      );
+      
+      // Update: Owner can update their displayName, but not their role. Admin can update anything.
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && uidNotModified() && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role && areImmutableFieldsUnchanged(['uid', 'email'])) || isAdmin()
+      );
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+
+    function isProjectMember(projectId) {
+      let projExists = exists(/databases/$(database)/documents/projects/$(projectId));
+      let proj = projExists ? get(/databases/$(database)/documents/projects/$(projectId)).data : null;
+      let isPM = projExists && proj.get('projectManagerId', '') == request.auth.uid;
+      let isCoord = projExists && request.auth.uid in proj.get('coordinatorIds', []);
+      let isAssigned = projExists && request.auth.uid in proj.get('assignedUsers', []);
+      return isPM || isCoord || isAssigned;
+    }
+
+    function canAccessProjectChat(projectId) {
+      return isAdmin() || isProjectMember(projectId);
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['projectId', 'userId', 'userName', 'text', 'createdAt']) &&
+             hasRequiredFields(['projectId', 'userId', 'userName', 'text', 'createdAt']) &&
+             data.projectId is string && data.projectId.size() > 0 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() < 100 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
+             data.createdAt is timestamp;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && canAccessProjectChat(resource.data.projectId);
+      allow create: if isAuthenticated() &&
+                    canAccessProjectChat(request.resource.data.projectId) &&
+                    isValidMessage(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /projects/{projectId} {
+      // Read: Authenticated users
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow create: if isAdmin() && isValidProject(request.resource.data);
+      allow update: if isAdmin() && isValidProject(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      // Read: Authenticated users
+      allow read: if isAuthenticated();
+      
+      // Create/Delete: Admin only
+      allow create: if isAdmin() && isValidTask(request.resource.data);
+      allow delete: if isAdmin();
+      
+      // Update: Admin OR Assigned User (who can only update progress and notes)
+      allow update: if isAuthenticated() && isValidTask(request.resource.data) && (
+        isAdmin() || 
+        (resource.data.assignedUserId == request.auth.uid && 
+         areImmutableFieldsUnchanged(['projectId', 'title', 'assignedUserId', 'deadline', 'priority']))
+      );
+    }
+
+    match /workLogs/{logId} {
+      // Read: Owner or Admin
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Create: Owner (punching in)
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidWorkLog(request.resource.data);
+      
+      // Update: Owner (punching out)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidWorkLog(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'punchIn']);
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      // Read: Admin
+      allow read: if isAdmin();
+      
+      // Create: Authenticated users (when they update a task)
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
+      
+      // Update: Admin (marking as read)
+      allow update: if isAdmin() && isValidNotification(request.resource.data);
+      
+      // Delete: Admin
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      // Read: Authenticated users (so they can be assigned or viewed)
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow create: if isAdmin() && isValidCustomer(request.resource.data);
+      allow update: if isAdmin() && isValidCustomer(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

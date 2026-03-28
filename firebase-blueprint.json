@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the Joudcon Event Management Suite.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "displayName": { "type": "string", "description": "The user's full name." },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "The user's role." }
+      },
+      "required": ["uid", "email", "displayName", "role"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "An event or project being managed.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the project." },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "The current status." },
+        "installationDate": { "type": "timestamp", "description": "The target installation date." },
+        "progress": { "type": "number", "description": "The overall progress percentage (0-100)." },
+        "assignedUsers": { "type": "array", "items": { "type": "string" }, "description": "List of user IDs assigned to this project." },
+        "projectManagerId": { "type": "string", "description": "User ID of the project manager." },
+        "coordinatorIds": { "type": "array", "items": { "type": "string" }, "description": "List of user IDs for coordinators." },
+        "customerName": { "type": "string", "description": "Name of the customer." },
+        "customerDetails": { "type": "string", "description": "Additional details about the customer." }
+      },
+      "required": ["name", "status", "installationDate", "progress"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A specific task within a project.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "The ID of the parent project." },
+        "title": { "type": "string", "description": "The title of the task." },
+        "assignedUserId": { "type": "string", "description": "The ID of the user assigned to the task." },
+        "deadline": { "type": "timestamp", "description": "The deadline for the task." },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"], "description": "The priority level." },
+        "progress": { "type": "number", "description": "The completion percentage (0-100)." },
+        "notes": { "type": "string", "description": "Status notes from the assigned user." }
+      },
+      "required": ["projectId", "title", "assignedUserId", "deadline", "priority", "progress"]
+    },
+    "WorkLog": {
+      "title": "WorkLog",
+      "description": "A time tracking log for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user." },
+        "punchIn": { "type": "timestamp", "description": "The time the user punched in." },
+        "punchOut": { "type": "timestamp", "description": "The time the user punched out." },
+        "hours": { "type": "number", "description": "The total hours worked in this session." }
+      },
+      "required": ["userId", "punchIn"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "An alert for admins.",
+      "type": "object",
+      "properties": {
+        "message": { "type": "string", "description": "The notification message." },
+        "createdAt": { "type": "timestamp", "description": "When the notification was created." },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
+        "type": { "type": "string", "enum": ["task_update", "message"], "description": "The type of notification." }
+      },
+      "required": ["message", "createdAt", "read", "type"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "A chat message in a project group.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["projectId", "userId", "userName", "text", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A CRM customer record.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string", "enum": ["lead", "active", "inactive"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["name", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/messages" },
+      "description": "Project group chat messages."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Stores active and completed projects."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Stores tasks assigned to users."
+    },
+    "/workLogs/{logId}": {
+      "schema": { "$ref": "#/entities/WorkLog" },
+      "description": "Stores punch-in/punch-out records."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Stores alerts for admins."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Stores CRM customer records."
+    }
+  }
+}
