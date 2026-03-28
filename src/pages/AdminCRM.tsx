@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Customer } from '../types';
-import { Users, Plus, Edit2, Trash2, Mail, Phone, Building, Search, X } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Mail, Phone, Building, Search, X, Filter, UserPlus } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { sounds } from '../lib/sounds';
 
 export function AdminCRM() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -71,8 +73,10 @@ export function AdminCRM() {
           createdAt: Timestamp.now()
         });
       }
+      sounds.play('success');
       resetForm();
     } catch (err) {
+      sounds.play('error');
       console.error("Error saving customer:", err);
     }
   };
@@ -81,7 +85,9 @@ export function AdminCRM() {
     if (window.confirm('Are you sure you want to delete this customer?')) {
       try {
         await deleteDoc(doc(db, 'customers', id));
+        sounds.play('success');
       } catch (err) {
+        sounds.play('error');
         console.error("Error deleting customer:", err);
       }
     }
@@ -96,237 +102,297 @@ export function AdminCRM() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-7xl mx-auto space-y-10"
+    >
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-blue-400" />
-            CRM & Customers
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Manage leads, active clients, and customer relationships.</p>
+        <div className="flex items-center gap-4">
+          <div className="w-2 h-10 bg-brand-orange rounded-full" />
+          <div>
+            <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              CRM Intelligence
+            </h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Strategic Client Relationship Management</p>
+          </div>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+          onClick={() => {
+            sounds.play('click');
+            setIsModalOpen(true);
+          }}
+          onMouseEnter={() => sounds.play('hover')}
+          className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
         >
-          <Plus className="w-4 h-4" />
+          <UserPlus className="w-5 h-5" />
           Add Customer
         </button>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex flex-wrap gap-4 items-center justify-between">
-          <div className="relative flex-1 min-w-[250px] max-w-md">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+      <div className="glass-card rounded-[40px] overflow-hidden border-white/5">
+        <div className="p-8 border-b border-white/5 bg-white/2 flex flex-wrap gap-6 items-center justify-between relative overflow-hidden">
+          <div className="absolute inset-0 shimmer-bg opacity-5 pointer-events-none" />
+          <div className="relative flex-1 min-w-[300px] max-w-lg group">
+            <Search className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-brand-orange transition-colors" />
             <input 
               type="text" 
-              placeholder="Search customers..." 
+              placeholder="SEARCH CLIENT DATABASE..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-6 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all placeholder:text-slate-600"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-400">Filter:</span>
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="all">All Statuses</option>
-              <option value="lead">Leads</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 glass-dark px-4 py-3 rounded-2xl border border-white/5">
+              <Filter className="w-4 h-4 text-brand-blue" />
+              <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-transparent text-[10px] font-black uppercase tracking-widest text-white focus:outline-none cursor-pointer"
+              >
+                <option value="all">Global Status</option>
+                <option value="lead">Leads</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900/80 text-xs uppercase text-slate-500">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-white/2 text-[10px] uppercase text-slate-500 font-black tracking-widest">
               <tr>
-                <th className="px-6 py-4 font-medium">Customer</th>
-                <th className="px-6 py-4 font-medium">Contact</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium">Added</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
+                <th className="px-8 py-5">Customer Profile</th>
+                <th className="px-8 py-5">Communication</th>
+                <th className="px-8 py-5">Status</th>
+                <th className="px-8 py-5">Registry Date</th>
+                <th className="px-8 py-5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
-              {filteredCustomers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                    No customers found matching your criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredCustomers.map(customer => (
-                  <tr key={customer.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-slate-200">{customer.name}</div>
-                      {customer.company && (
-                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                          <Building className="w-3 h-3" />
-                          {customer.company}
+            <tbody className="divide-y divide-white/5">
+              <AnimatePresence mode="popLayout">
+                {filteredCustomers.length === 0 ? (
+                  <motion.tr 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <td colSpan={5} className="px-8 py-20 text-center">
+                      <div className="flex flex-col items-center gap-4 opacity-30">
+                        <Users className="w-12 h-12" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">No records found in current sector</p>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ) : (
+                  filteredCustomers.map(customer => (
+                    <motion.tr 
+                      layout
+                      key={customer.id} 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onMouseEnter={() => sounds.play('hover')}
+                      className="hover:bg-white/2 transition-colors group"
+                    >
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-4 relative">
+                          <div className="w-10 h-10 rounded-2xl bg-brand-blue/10 flex items-center justify-center text-brand-blue font-black text-xs border border-brand-blue/20 relative overflow-hidden group-hover:border-brand-orange/40 transition-colors">
+                            <div className="absolute inset-0 shimmer-bg opacity-0 group-hover:opacity-20 transition-opacity" />
+                            <span className="relative z-10">{customer.name.charAt(0).toUpperCase()}</span>
+                          </div>
+                          <div>
+                            <div className="font-black text-white group-hover:text-brand-orange transition-colors">{customer.name}</div>
+                            {customer.company && (
+                              <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-tighter text-slate-500 mt-1">
+                                <Building className="w-3 h-3" />
+                                {customer.company}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-1">
-                        {customer.email && (
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
-                            <Mail className="w-3 h-3" />
-                            <a href={`mailto:${customer.email}`} className="hover:text-blue-400">{customer.email}</a>
-                          </div>
-                        )}
-                        {customer.phone && (
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
-                            <Phone className="w-3 h-3" />
-                            <a href={`tel:${customer.phone}`} className="hover:text-blue-400">{customer.phone}</a>
-                          </div>
-                        )}
-                        {!customer.email && !customer.phone && <span className="text-xs text-slate-600">No contact info</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${
-                        customer.status === 'active' ? 'bg-green-500/10 text-green-400' :
-                        customer.status === 'lead' ? 'bg-blue-500/10 text-blue-400' :
-                        'bg-slate-500/10 text-slate-400'
-                      }`}>
-                        {customer.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-500">
-                      {customer.createdAt?.toDate().toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenEdit(customer)}
-                          className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(customer.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="space-y-2">
+                          {customer.email && (
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                              <Mail className="w-3 h-3 text-brand-blue" />
+                              <a href={`mailto:${customer.email}`} className="hover:text-brand-orange transition-colors">{customer.email}</a>
+                            </div>
+                          )}
+                          {customer.phone && (
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                              <Phone className="w-3 h-3 text-brand-blue" />
+                              <a href={`tel:${customer.phone}`} className="hover:text-brand-orange transition-colors">{customer.phone}</a>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                          customer.status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                          customer.status === 'lead' ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20' :
+                          'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                        }`}>
+                          {customer.status}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest font-mono">
+                        {customer.createdAt?.toDate().toLocaleDateString()}
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => {
+                              sounds.play('click');
+                              handleOpenEdit(customer);
+                            }}
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="p-2 text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 rounded-xl transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(customer.id)}
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between shrink-0">
-              <h2 className="text-xl font-bold text-white">
-                {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
-              </h2>
-              <button onClick={resetForm} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Full Name *</label>
-                <input 
-                  type="text" 
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                  placeholder="John Doe"
-                />
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-brand-dark/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="glass-card rounded-[40px] w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-white/5"
+            >
+              <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/2">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-orange/10 flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-brand-orange" />
+                  </div>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+                    {editingCustomer ? 'Update Intelligence' : 'New Client Registry'}
+                  </h2>
+                </div>
+                <button onClick={resetForm} className="p-2 text-slate-500 hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
-                  <input 
-                    type="email" 
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Phone</label>
-                  <input 
-                    type="tel" 
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                    placeholder="+1 (555) 000-0000"
-                  />
-                </div>
-              </div>
+              <form onSubmit={handleSubmit} className="p-8 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Operational Name *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                      placeholder="ENTER FULL NAME"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Communication Channel</label>
+                      <input 
+                        type="email" 
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                        placeholder="EMAIL ADDRESS"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Secure Line</label>
+                      <input 
+                        type="tel" 
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                        placeholder="PHONE NUMBER"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Company</label>
-                  <input 
-                    type="text" 
-                    value={company}
-                    onChange={e => setCompany(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                    placeholder="Acme Corp"
-                  />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Organization</label>
+                      <input 
+                        type="text" 
+                        value={company}
+                        onChange={e => setCompany(e.target.value)}
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                        placeholder="COMPANY NAME"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Strategic Status</label>
+                      <select 
+                        value={status}
+                        onChange={e => setStatus(e.target.value as any)}
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
+                      >
+                        <option value="lead">Lead</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Intelligence Notes</label>
+                    <textarea 
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all min-h-[120px] resize-none"
+                      placeholder="ADDITIONAL STRATEGIC CONTEXT..."
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
-                  <select 
-                    value={status}
-                    onChange={e => setStatus(e.target.value as any)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+
+                <div className="pt-6 flex justify-end gap-4">
+                  <button 
+                    type="button"
+                    onClick={resetForm}
+                    className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white/5 transition-all"
                   >
-                    <option value="lead">Lead</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                    Abort
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-[0_0_20px_rgba(255,176,65,0.2)] active:scale-95"
+                  >
+                    {editingCustomer ? 'Update Record' : 'Initialize Registry'}
+                  </button>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Notes</label>
-                <textarea 
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 min-h-[100px] resize-y"
-                  placeholder="Additional context or notes about this customer..."
-                />
-              </div>
-
-              <div className="pt-4 flex justify-end gap-3">
-                <button 
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-medium transition-colors"
-                >
-                  {editingCustomer ? 'Save Changes' : 'Create Customer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

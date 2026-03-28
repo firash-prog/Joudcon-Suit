@@ -4,7 +4,9 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db } from '../firebase';
 import { User, Role } from '../types';
-import { Users, Plus, Edit2, Trash2, Shield, User as UserIcon, X, Search, AlertCircle } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Shield, User as UserIcon, X, Search, AlertCircle, Key, Mail, BadgeCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { sounds } from '../lib/sounds';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize a secondary app for creating users without logging out the admin
@@ -57,21 +59,18 @@ export function AdminUsers() {
 
     try {
       if (editingUser) {
-        // Update existing user
         await updateDoc(doc(db, 'users', editingUser.uid), {
           displayName,
           role
         });
       } else {
-        // Create new user via secondary auth
         if (!password || password.length < 6) {
           throw new Error("Password must be at least 6 characters long.");
         }
         
         const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        await signOut(secondaryAuth); // Sign out the secondary instance immediately
+        await signOut(secondaryAuth);
         
-        // Create user document in Firestore
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           uid: userCredential.user.uid,
           email,
@@ -79,8 +78,10 @@ export function AdminUsers() {
           role
         });
       }
+      sounds.play('success');
       resetForm();
     } catch (err: any) {
+      sounds.play('error');
       console.error("Error saving user:", err);
       setError(err.message || "An error occurred while saving the user.");
     } finally {
@@ -92,7 +93,9 @@ export function AdminUsers() {
     if (window.confirm('Are you sure you want to delete this user profile? Note: This does not delete their authentication record.')) {
       try {
         await deleteDoc(doc(db, 'users', uid));
+        sounds.play('success');
       } catch (err) {
+        sounds.play('error');
         console.error("Error deleting user:", err);
       }
     }
@@ -104,194 +107,254 @@ export function AdminUsers() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-7xl mx-auto space-y-10"
+    >
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Shield className="w-6 h-6 text-blue-400" />
-            User Management
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">Create users and manage access control roles.</p>
+        <div className="flex items-center gap-4">
+          <div className="w-2 h-10 bg-brand-orange rounded-full" />
+          <div>
+            <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              Access Control
+            </h1>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Personnel & Permission Management</p>
+          </div>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+          onClick={() => {
+            sounds.play('click');
+            setIsModalOpen(true);
+          }}
+          onMouseEnter={() => sounds.play('hover')}
+          className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
         >
-          <Plus className="w-4 h-4" />
-          Create User
+          <Plus className="w-5 h-5" />
+          Initialize Agent
         </button>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+      <div className="glass-card rounded-[40px] overflow-hidden border-white/5">
+        <div className="p-8 border-b border-white/5 bg-white/2 relative overflow-hidden">
+          <div className="absolute inset-0 shimmer-bg opacity-5 pointer-events-none" />
+          <div className="relative max-w-lg group">
+            <Search className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-brand-orange transition-colors" />
             <input 
               type="text" 
-              placeholder="Search users..." 
+              placeholder="SEARCH PERSONNEL DATABASE..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-6 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all placeholder:text-slate-600"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-900/80 text-xs uppercase text-slate-500">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-white/2 text-[10px] uppercase text-slate-500 font-black tracking-widest">
               <tr>
-                <th className="px-6 py-4 font-medium">User</th>
-                <th className="px-6 py-4 font-medium">Email</th>
-                <th className="px-6 py-4 font-medium">Role</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
+                <th className="px-8 py-5">Agent Identity</th>
+                <th className="px-8 py-5">Communication Channel</th>
+                <th className="px-8 py-5">Clearance Level</th>
+                <th className="px-8 py-5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
-              {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                    No users found.
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map(user => (
-                  <tr key={user.uid} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-medium border border-slate-700">
-                          {user.displayName.charAt(0).toUpperCase()}
+            <tbody className="divide-y divide-white/5">
+              <AnimatePresence mode="popLayout">
+                {filteredUsers.length === 0 ? (
+                  <motion.tr 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <td colSpan={4} className="px-8 py-20 text-center">
+                      <div className="flex flex-col items-center gap-4 opacity-30">
+                        <Users className="w-12 h-12" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">No personnel records found</p>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ) : (
+                  filteredUsers.map(user => (
+                    <motion.tr 
+                      layout
+                      key={user.uid} 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onMouseEnter={() => sounds.play('hover')}
+                      className="hover:bg-white/2 transition-colors group"
+                    >
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-4 relative">
+                          <div className="w-10 h-10 rounded-2xl bg-brand-blue/10 flex items-center justify-center text-brand-blue font-black text-xs border border-brand-blue/20 relative overflow-hidden group-hover:border-brand-orange/40 transition-colors">
+                            <div className="absolute inset-0 shimmer-bg opacity-0 group-hover:opacity-20 transition-opacity" />
+                            <span className="relative z-10">{user.displayName.charAt(0).toUpperCase()}</span>
+                          </div>
+                          <span className="font-black text-white group-hover:text-brand-orange transition-colors uppercase tracking-tight">{user.displayName}</span>
                         </div>
-                        <span className="font-medium text-slate-200">{user.displayName}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-400">{user.email}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider flex items-center gap-1 w-fit ${
-                        user.role === 'admin' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'
-                      }`}>
-                        {user.role === 'admin' ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenEdit(user)}
-                          className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
-                          title="Edit User"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(user.uid)}
-                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                          title="Delete User"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                      </td>
+                      <td className="px-8 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{user.email}</td>
+                      <td className="px-8 py-5">
+                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border flex items-center gap-2 w-fit ${
+                          user.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                        }`}>
+                          {user.role === 'admin' ? <Shield className="w-3 h-3" /> : <UserIcon className="w-3 h-3" />}
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => {
+                              sounds.play('click');
+                              handleOpenEdit(user);
+                            }}
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="p-2 text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 rounded-xl transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              sounds.play('click');
+                              handleDelete(user.uid);
+                            }}
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between shrink-0">
-              <h2 className="text-xl font-bold text-white">
-                {editingUser ? 'Edit User Role' : 'Create New User'}
-              </h2>
-              <button onClick={resetForm} className="text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                  <p>{error}</p>
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-brand-dark/80 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="glass-card rounded-[40px] w-full max-w-md shadow-2xl overflow-hidden flex flex-col border-white/5"
+            >
+              <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/2">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-orange/10 flex items-center justify-center">
+                    <BadgeCheck className="w-5 h-5 text-brand-orange" />
+                  </div>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+                    {editingUser ? 'Update Clearance' : 'New Agent Registry'}
+                  </h2>
                 </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Display Name *</label>
-                <input 
-                  type="text" 
-                  required
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                  placeholder="John Doe"
-                />
+                <button onClick={resetForm} className="p-2 text-slate-500 hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Email Address *</label>
-                <input 
-                  type="email" 
-                  required
-                  disabled={!!editingUser}
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  placeholder="john@example.com"
-                />
-              </div>
+              <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                )}
 
-              {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Password *</label>
-                  <input 
-                    type="password" 
-                    required
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                    placeholder="Minimum 6 characters"
-                    minLength={6}
-                  />
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Operational Call Sign *</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 group-focus-within:text-brand-orange transition-colors" />
+                    <input 
+                      type="text" 
+                      required
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl pl-14 pr-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                      placeholder="ENTER AGENT NAME"
+                    />
+                  </div>
                 </div>
-              )}
+                
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Communication Channel *</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 group-focus-within:text-brand-orange transition-colors" />
+                    <input 
+                      type="email" 
+                      required
+                      disabled={!!editingUser}
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full bg-white/5 border border-white/5 rounded-2xl pl-14 pr-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      placeholder="AGENT EMAIL"
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Access Role *</label>
-                <select 
-                  value={role}
-                  onChange={e => setRole(e.target.value as Role)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="user">User (Standard Access)</option>
-                  <option value="admin">Admin (Full Access)</option>
-                </select>
-              </div>
+                {!editingUser && (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Security Key *</label>
+                    <div className="relative group">
+                      <Key className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 group-focus-within:text-brand-orange transition-colors" />
+                      <input 
+                        type="password" 
+                        required
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className="w-full bg-white/5 border border-white/5 rounded-2xl pl-14 pr-6 py-4 text-white text-xs font-bold uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all"
+                        placeholder="MIN 6 CHARACTERS"
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+                )}
 
-              <div className="pt-4 flex justify-end gap-3">
-                <button 
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  {loading ? 'Saving...' : editingUser ? 'Save Changes' : 'Create User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Clearance Level *</label>
+                  <select 
+                    value={role}
+                    onChange={e => setRole(e.target.value as Role)}
+                    className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
+                  >
+                    <option value="user">Standard Agent</option>
+                    <option value="admin">Strategic Admin</option>
+                  </select>
+                </div>
+
+                <div className="pt-6 flex justify-end gap-4">
+                  <button 
+                    type="button"
+                    onClick={resetForm}
+                    className="px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white/5 transition-all"
+                  >
+                    Abort
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={loading}
+                    className="bg-brand-orange hover:bg-brand-orange/90 disabled:opacity-30 text-brand-dark px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-[0_0_20px_rgba(255,176,65,0.2)] active:scale-95"
+                  >
+                    {loading ? 'Processing...' : editingUser ? 'Update Registry' : 'Initialize Agent'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

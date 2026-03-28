@@ -1,1 +1,80 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-blue: #00a3ff;
+  --color-brand-orange: #ffb041;
+  --color-brand-dark: #0a0a0b;
+  --color-brand-surface: #121214;
+  --color-brand-accent: #ff6b00;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  
+  --animate-shimmer: shimmer 2s infinite linear;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes glow {
+  from { box-shadow: 0 0 5px rgba(255, 176, 65, 0.2), 0 0 10px rgba(255, 176, 65, 0.1); }
+  to { box-shadow: 0 0 20px rgba(255, 176, 65, 0.4), 0 0 30px rgba(255, 176, 65, 0.2); }
+}
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-slate-200 antialiased selection:bg-brand-orange/30 selection:text-brand-orange overflow-x-hidden relative;
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(210, 100%, 50%, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(35, 100%, 62%, 0.1) 0px, transparent 50%),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+  .glass-dark {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5;
+  }
+  .glass-card {
+    @apply bg-brand-surface/40 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.3)];
+  }
+  .glass-orange {
+    @apply bg-brand-orange/5 backdrop-blur-2xl border border-brand-orange/20 shadow-[0_10px_30px_rgba(255,176,65,0.1)];
+  }
+  .glass-blue {
+    @apply bg-brand-blue/5 backdrop-blur-2xl border border-brand-blue/20 shadow-[0_10px_30px_rgba(0,163,255,0.1)];
+  }
+  .shimmer-bg {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-blue via-white to-brand-orange;
+  }
+  .neon-border {
+    @apply border border-brand-orange/50 shadow-[0_0_10px_rgba(255,176,65,0.3)];
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

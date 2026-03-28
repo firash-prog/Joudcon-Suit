@@ -12,11 +12,12 @@ import { Profile } from './pages/Profile';
 import { AdminCRM } from './pages/AdminCRM';
 import { AdminUsers } from './pages/AdminUsers';
 import { Layout } from './components/Layout';
+import { Preloader } from './components/Preloader';
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
   const { user, dbUser, loading } = useAuth();
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) return <Preloader />;
 
   if (!user || !dbUser) return <Navigate to="/login" replace />;
 

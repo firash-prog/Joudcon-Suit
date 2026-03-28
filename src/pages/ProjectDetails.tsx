@@ -3,7 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, collection, query, where, onSnapshot, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Project, Task, User } from '../types';
-import { ArrowLeft, Calendar, Users, Trash2, Plus, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Calendar, Users, Trash2, Plus, MessageSquare, Briefcase, UserCheck, Clock, CheckCircle2, LayoutGrid, Info } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { sounds } from '../lib/sounds';
 
 export function ProjectDetails() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -41,21 +43,32 @@ export function ProjectDetails() {
         priority: newTask.priority,
         progress: 0
       });
+      sounds.play('success');
       setNewTask({ title: '', assignedUserId: '', deadline: '', priority: 'medium' });
     } catch (err) {
+      sounds.play('error');
       console.error(err);
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    try {
-      await deleteDoc(doc(db, 'tasks', taskId));
-    } catch (err) {
-      console.error(err);
+    sounds.play('click');
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      try {
+        await deleteDoc(doc(db, 'tasks', taskId));
+        sounds.play('success');
+      } catch (err) {
+        sounds.play('error');
+        console.error(err);
+      }
     }
   };
 
-  if (!project) return <div className="p-8 text-white flex justify-center">Loading project details...</div>;
+  if (!project) return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-brand-orange/20 border-t-brand-orange rounded-full animate-spin" />
+    </div>
+  );
 
   const projectUserIds = new Set<string>();
   if (project.projectManagerId) projectUserIds.add(project.projectManagerId);
@@ -63,167 +76,286 @@ export function ProjectDetails() {
   if (project.assignedUsers) project.assignedUsers.forEach(id => projectUserIds.add(id));
   const projectUsers = users.filter(u => projectUserIds.has(u.uid));
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/admin" className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full transition-colors">
-            <ArrowLeft className="w-5 h-5" />
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="max-w-7xl mx-auto space-y-10"
+    >
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-6">
+          <Link 
+            to="/admin" 
+            onMouseEnter={() => sounds.play('hover')}
+            onClick={() => sounds.play('click')}
+            className="w-12 h-12 glass-dark hover:bg-white/10 text-slate-400 hover:text-white rounded-2xl flex items-center justify-center transition-all border border-white/5 active:scale-90"
+          >
+            <ArrowLeft className="w-6 h-6" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">{project.name}</h1>
-            {project.customerName && <p className="text-slate-400 text-sm">Customer: {project.customerName}</p>}
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-3xl font-black text-white uppercase tracking-tighter">{project.name}</h1>
+              <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                project.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+              }`}>
+                {project.status}
+              </span>
+            </div>
+            {project.customerName && (
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Briefcase className="w-3 h-3 text-brand-orange" />
+                Strategic Client: {project.customerName}
+              </p>
+            )}
           </div>
         </div>
         <Link 
           to={`/projects/${project.id}/chat`}
-          className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-blue-400 px-4 py-2 rounded-xl transition-colors"
+          onMouseEnter={() => sounds.play('hover')}
+          onClick={() => sounds.play('click')}
+          className="bg-brand-blue hover:bg-brand-blue/90 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(0,122,255,0.2)]"
         >
           <MessageSquare className="w-5 h-5" />
-          Group Chat
+          Secure Group Chat
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-2 space-y-10">
           {/* Tasks Section */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-white mb-6">Project Tasks</h2>
+          <motion.div variants={itemVariants} className="glass-card rounded-[40px] p-8 border-white/5 relative overflow-hidden group">
+            <div className="absolute inset-0 shimmer-bg opacity-0 group-hover:opacity-5 transition-opacity pointer-events-none" />
+            <div className="flex items-center justify-between mb-8 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-brand-orange/10 flex items-center justify-center">
+                  <LayoutGrid className="w-5 h-5 text-brand-orange" />
+                </div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Operational Tasks</h2>
+              </div>
+            </div>
             
             {/* Add Task Form */}
-            <form onSubmit={handleCreateTask} className="flex flex-wrap gap-3 mb-8 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-              <input 
-                type="text" 
-                placeholder="Task Title" 
-                required
-                className="flex-1 min-w-[200px] bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                value={newTask.title}
-                onChange={e => setNewTask({...newTask, title: e.target.value})}
-              />
-              <select 
-                required
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                value={newTask.assignedUserId}
-                onChange={e => setNewTask({...newTask, assignedUserId: e.target.value})}
-              >
-                <option value="">Assign To</option>
-                {projectUsers.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
-              </select>
-              <input 
-                type="datetime-local" 
-                required
-                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                value={newTask.deadline}
-                onChange={e => setNewTask({...newTask, deadline: e.target.value})}
-              />
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-                <Plus className="w-4 h-4" /> Add
-              </button>
+            <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10 bg-white/2 p-6 rounded-[32px] border border-white/5">
+              <div className="md:col-span-2">
+                <input 
+                  type="text" 
+                  placeholder="TASK OBJECTIVE..." 
+                  required
+                  className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all placeholder:text-slate-600"
+                  value={newTask.title}
+                  onChange={e => setNewTask({...newTask, title: e.target.value})}
+                />
+              </div>
+              <div>
+                <select 
+                  required
+                  className="w-full bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all cursor-pointer"
+                  value={newTask.assignedUserId}
+                  onChange={e => setNewTask({...newTask, assignedUserId: e.target.value})}
+                >
+                  <option value="">ASSIGN AGENT</option>
+                  {projectUsers.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-4">
+                <input 
+                  type="datetime-local" 
+                  required
+                  className="flex-1 bg-white/5 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white focus:outline-none focus:border-brand-orange/30 transition-all"
+                  value={newTask.deadline}
+                  onChange={e => setNewTask({...newTask, deadline: e.target.value})}
+                />
+                <button 
+                  type="submit" 
+                  onMouseEnter={() => sounds.play('hover')}
+                  onClick={() => sounds.play('click')}
+                  className="bg-brand-orange hover:bg-brand-orange/90 text-brand-dark p-4 rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,176,65,0.2)]"
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
+              </div>
             </form>
 
             {/* Task List */}
-            <div className="space-y-3">
-              {tasks.length === 0 ? (
-                <p className="text-slate-500 text-center py-4">No tasks created yet.</p>
-              ) : (
-                tasks.map(task => {
-                  const assignee = users.find(u => u.uid === task.assignedUserId);
-                  return (
-                    <div key={task.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-white">{task.title}</h4>
-                        <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                          <span className="flex items-center gap-1"><Users className="w-3 h-3"/> {assignee?.displayName || 'Unknown'}</span>
-                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {task.deadline.toDate().toLocaleDateString()}</span>
-                          <span className={`px-2 py-0.5 rounded-full font-medium ${
-                            task.priority === 'high' ? 'bg-red-500/10 text-red-400' :
-                            task.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-400' :
-                            'bg-blue-500/10 text-blue-400'
-                          }`}>{task.priority}</span>
+            <div className="space-y-4">
+              <AnimatePresence mode="popLayout">
+                {tasks.length === 0 ? (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-slate-600 text-center py-20 border-2 border-dashed border-white/5 rounded-[32px]"
+                  >
+                    <Info className="w-10 h-10 mx-auto mb-4 opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">No operational tasks initialized</p>
+                  </motion.div>
+                ) : (
+                  tasks.map(task => {
+                    const assignee = users.find(u => u.uid === task.assignedUserId);
+                    return (
+                      <motion.div 
+                        layout
+                        key={task.id} 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="glass-dark border border-white/5 rounded-[32px] p-6 flex items-center justify-between group hover:border-brand-orange/20 transition-all"
+                      >
+                        <div className="flex-1">
+                          <h4 className="font-black text-white uppercase tracking-tight text-lg mb-2 group-hover:text-brand-orange transition-colors">{task.title}</h4>
+                          <div className="flex flex-wrap items-center gap-6 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            <span className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">
+                              <UserCheck className="w-3.5 h-3.5 text-brand-blue" /> 
+                              {assignee?.displayName || 'UNASSIGNED'}
+                            </span>
+                            <span className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl">
+                              <Clock className="w-3.5 h-3.5 text-brand-orange" /> 
+                              {task.deadline.toDate().toLocaleDateString()}
+                            </span>
+                            <span className={`px-3 py-1.5 rounded-xl border ${
+                              task.priority === 'high' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                              task.priority === 'medium' ? 'bg-brand-orange/10 text-brand-orange border-brand-orange/20' :
+                              'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                            }`}>
+                              {task.priority}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <span className="text-xs text-slate-400 block mb-1">Progress</span>
-                          <span className="text-sm font-bold text-white">{task.progress}%</span>
+                        <div className="flex items-center gap-10">
+                          <div className="text-right">
+                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest block mb-1">Execution</span>
+                            <span className="text-xl font-black text-white font-mono">{task.progress}%</span>
+                          </div>
+                          <button 
+                            onClick={() => handleDeleteTask(task.id)}
+                            onMouseEnter={() => sounds.play('hover')}
+                            className="w-10 h-10 flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         </div>
-                        <button 
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                      </motion.div>
+                    );
+                  })
+                )}
+              </AnimatePresence>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Sidebar Details */}
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Project Info</h3>
-            <div className="space-y-4">
+        <div className="space-y-10">
+          <motion.div variants={itemVariants} className="glass-card rounded-[40px] p-8 border-white/5">
+            <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-8 flex items-center gap-3">
+              <div className="w-1.5 h-6 bg-brand-orange rounded-full" />
+              Strategic Intelligence
+            </h3>
+            <div className="space-y-8">
               <div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Status</span>
-                <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium uppercase tracking-wider">
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Operational Status</span>
+                <span className="px-4 py-2 rounded-2xl bg-brand-blue/10 text-brand-blue text-[10px] font-black uppercase tracking-[0.2em] border border-brand-blue/20">
                   {project.status}
                 </span>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Overall Progress</span>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${project.progress}%` }} />
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Global Completion</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-[10px] font-black text-white uppercase tracking-widest">
+                    <span>Progress Matrix</span>
+                    <span className="font-mono">{Math.round(project.progress)}%</span>
                   </div>
-                  <span className="text-sm font-bold text-white">{Math.round(project.progress)}%</span>
+                  <div className="h-3 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${project.progress}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      className="h-full bg-gradient-to-r from-brand-blue to-brand-orange rounded-full shadow-[0_0_10px_rgba(0,122,255,0.3)]"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Installation Date</span>
-                <span className="text-sm text-slate-300">{project.installationDate.toDate().toLocaleString()}</span>
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Deployment Deadline</span>
+                <div className="flex items-center gap-3 text-white font-black text-sm uppercase tracking-tight">
+                  <Calendar className="w-5 h-5 text-brand-orange" />
+                  {project.installationDate.toDate().toLocaleString()}
+                </div>
               </div>
               {project.customerDetails && (
                 <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Customer Requirements</span>
-                  <p className="text-sm text-slate-300 whitespace-pre-wrap">{project.customerDetails}</p>
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Strategic Requirements</span>
+                  <div className="glass-dark p-5 rounded-[24px] border border-white/5">
+                    <p className="text-xs text-slate-400 font-bold leading-relaxed whitespace-pre-wrap">{project.customerDetails}</p>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Team</h3>
-            <div className="space-y-3">
+          <motion.div variants={itemVariants} className="glass-card rounded-[40px] p-8 border-white/5">
+            <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-8 flex items-center gap-3">
+              <div className="w-1.5 h-6 bg-brand-blue rounded-full" />
+              Assigned Personnel
+            </h3>
+            <div className="space-y-8">
               {project.projectManagerId && (
                 <div>
-                  <span className="text-xs text-slate-500 block mb-1">Project Manager</span>
-                  <div className="text-sm text-slate-300">{users.find(u => u.uid === project.projectManagerId)?.displayName || 'Unknown'}</div>
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Project Director</span>
+                  <div className="flex items-center gap-3 text-white font-black text-sm uppercase tracking-tight">
+                    <div className="w-8 h-8 rounded-xl bg-brand-orange/10 flex items-center justify-center text-brand-orange text-[10px]">PM</div>
+                    {users.find(u => u.uid === project.projectManagerId)?.displayName || 'UNKNOWN'}
+                  </div>
                 </div>
               )}
               {project.coordinatorIds && project.coordinatorIds.length > 0 && (
                 <div>
-                  <span className="text-xs text-slate-500 block mb-1">Coordinators</span>
-                  <div className="text-sm text-slate-300">
-                    {project.coordinatorIds.map(id => users.find(u => u.uid === id)?.displayName).filter(Boolean).join(', ')}
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Strategic Coordinators</span>
+                  <div className="flex flex-wrap gap-2">
+                    {project.coordinatorIds.map(id => {
+                      const u = users.find(u => u.uid === id);
+                      return u ? (
+                        <div key={id} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {u.displayName}
+                        </div>
+                      ) : null;
+                    })}
                   </div>
                 </div>
               )}
               {project.assignedUsers && project.assignedUsers.length > 0 && (
                 <div>
-                  <span className="text-xs text-slate-500 block mb-1">Assigned Team</span>
-                  <div className="text-sm text-slate-300">
-                    {project.assignedUsers.map(id => users.find(u => u.uid === id)?.displayName).filter(Boolean).join(', ')}
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-3">Field Agents</span>
+                  <div className="flex flex-wrap gap-2">
+                    {project.assignedUsers.map(id => {
+                      const u = users.find(u => u.uid === id);
+                      return u ? (
+                        <div key={id} className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {u.displayName}
+                        </div>
+                      ) : null;
+                    })}
                   </div>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
